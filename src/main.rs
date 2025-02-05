@@ -2,11 +2,12 @@ use anyhow::Result;
 use dotenv::dotenv;
 use env_logger::Env;
 use futures_util::{SinkExt, StreamExt};
-use hardware::Hardware;
+use hardware::{Hardware, HardwareInfo};
 use log::{error, info, warn};
 use std::{env, net::SocketAddr, time::Duration};
 use tokio::{
     net::{TcpListener, TcpStream},
+    sync::broadcast,
     task, time,
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
@@ -28,6 +29,14 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "2009".to_string())
         .parse()?;
 
+    #[allow(
+        unused_variables,
+        reason = "we don't need the receiver here but dropping it closes the channel"
+    )]
+    let (tx, rx) = broadcast::channel::<HardwareInfo>(1);
+
+    task::spawn(sysinfo_thread(tx.clone()));
+
     let server = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?;
 
     loop {
@@ -47,12 +56,27 @@ async fn main() -> Result<()> {
             }
         };
 
-        task::spawn(handle_connection(websocket));
+        let tx = tx.clone().subscribe();
+
+        task::spawn(handle_connection(websocket, tx));
     }
 }
 
-async fn handle_connection(websocket: WebSocketStream<TcpStream>) -> Result<()> {
+async fn handle_connection(
+    websocket: WebSocketStream<TcpStream>,
+    mut channel: broadcast::Receiver<HardwareInfo>,
+) -> Result<()> {
     let (mut write, _) = websocket.split();
+
+    while let Ok(hardware_info) = channel.recv().await {
+        let json = serde_json::to_string(&hardware_info)?;
+        write.send(Message::Text(json.into())).await?;
+    }
+
+    Ok(())
+}
+
+async fn sysinfo_thread(tx: broadcast::Sender<HardwareInfo>) -> Result<()> {
     let mut hardware = Hardware::new();
     let interval = Duration::from_millis(
         env::var("INTERVAL")
@@ -60,11 +84,18 @@ async fn handle_connection(websocket: WebSocketStream<TcpStream>) -> Result<()> 
             .parse()?,
     );
     hardware.refresh().await?;
-
+    time::sleep(interval).await;
     loop {
-        let hardware_info = hardware.get().await?;
-        let json = serde_json::to_string(&hardware_info)?;
-        write.send(Message::Text(json.into())).await?;
+        let hardware_info = match hardware.get().await {
+            Ok(hardware_info) => hardware_info,
+            Err(e) => {
+                error!("failed to get hardware info: {}", e);
+                continue;
+            }
+        };
+        if let Err(e) = tx.send(hardware_info) {
+            error!("failed to send hardware info to channel: {}", e);
+        }
         time::sleep(interval).await;
     }
 }

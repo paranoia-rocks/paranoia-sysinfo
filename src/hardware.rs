@@ -10,7 +10,7 @@ fn round_to(num: f32, places: i32) -> f32 {
     (num * factor).round() / factor
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HardwareInfo {
     cpu: u8,
     mem: u8,
