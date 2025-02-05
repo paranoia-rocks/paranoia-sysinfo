@@ -10,7 +10,7 @@ use tokio::{
     sync::broadcast,
     task, time,
 };
-use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
+use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 
 mod hardware;
 
@@ -38,6 +38,8 @@ async fn main() -> Result<()> {
     task::spawn(sysinfo_thread(tx.clone()));
 
     let server = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?;
+
+    info!("listening on port {}", port);
 
     loop {
         let (socket, _) = match server.accept().await {
