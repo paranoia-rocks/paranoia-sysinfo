@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dotenv::dotenv;
 use env_logger::Env;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use hardware::{Hardware, HardwareInfo};
 use log::{error, info, warn};
 use std::{env, net::SocketAddr, time::Duration};
@@ -72,7 +72,10 @@ async fn handle_connection(
 
     while let Ok(hardware_info) = channel.recv().await {
         let json = serde_json::to_string(&hardware_info)?;
-        write.send(Message::Text(json.into())).await?;
+        if !write.send(Message::Text(json.into())).await.is_ok() {
+            error!("client disconnected");
+            return Ok(());
+        };
     }
 
     Ok(())
