@@ -1,9 +1,9 @@
 use anyhow::Result;
 use dotenv::dotenv;
 use env_logger::Env;
-use futures_util::{stream::SplitSink, SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use hardware::{Hardware, HardwareInfo};
-use log::{error, info, trace, warn};
+use log::{error, info, warn};
 use std::{env, net::SocketAddr, time::Duration};
 use tokio::{
     net::{TcpListener, TcpStream},
