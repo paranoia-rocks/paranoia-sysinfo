@@ -12,6 +12,7 @@ use tokio::{
 };
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 
+mod allocator;
 mod hardware;
 
 #[tokio::main]
