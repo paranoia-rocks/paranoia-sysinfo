@@ -73,7 +73,6 @@ async fn handle_connection(
     while let Ok(hardware_info) = channel.recv().await {
         let json = serde_json::to_string(&hardware_info)?;
         if !write.send(Message::Text(json.into())).await.is_ok() {
-            trace!("client disconnected -- freeing their stuff");
             return Ok(());
         };
     }
